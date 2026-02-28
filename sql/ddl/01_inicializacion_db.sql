@@ -91,6 +91,36 @@ GO
 -- 6. VISTAS DE NEGOCIO (CAPA DE CONSUMO)
 -- ==============================================================================
 
+/*
+Vista: core.vw_perfil_detallado_prestadores
+Descripción: 
+    Consolida la información maestra de los prestadores de salud con el detalle 
+    específico de su capacidad instalada (camas, unidades, etc.).
+    
+Punto de evaluación:
+    Muestra la integración entre la dimensión maestra (REPS) y los hechos (CIIPS).
+
+Campos clave:
+    - Nombre_Institucion: Razón social del prestador.
+    - Cantidad_Reportada: Métrica de capacidad física.
+    - Fecha_Ultimo_Reporte: Fecha de vigencia reportada por el prestador.
+*/
+
+/*
+Vista: core.vw_estado_operativo_red_salud
+Descripción: 
+    Vista de monitoreo gerencial que clasifica la frescura de los datos 
+    mediante una lógica de semaforización técnica.
+    
+Lógica del semaforo:
+    - 'Información Desactualizada': Reportes con antigüedad mayor a 1 año.
+    - 'Requiere Actualización': Reportes con antigüedad entre 6 meses y 1 año.
+    - 'Información Vigente': Reportes realizados en los últimos 6 meses.
+
+Campo clave:
+    - Semaforo_Vigencia: Categorización de calidad temporal del dato.
+*/
+
 CREATE OR ALTER VIEW [core].[vw_perfil_detallado_prestadores] AS
 SELECT 
     p.prestador_nombre AS Nombre_Institucion,
@@ -118,6 +148,41 @@ SELECT
     END AS Semaforo_Vigencia
 FROM core.fact_capacidad_instalada f
 INNER JOIN core.dim_prestador p ON f.prestador_id = p.prestador_id;
+GO
+
+/* Vista: core.vw_resumen_capacidad_por_municipio
+Descripción: Expone la sumatoria de capacidades (camas, consultorios, etc.) agregada por  niveles territoriales para análisis de cobertura geográfica.
+*/
+CREATE OR ALTER     VIEW [core].[vw_resumen_capacidad_por_municipio] AS
+SELECT 
+    d.departamento_nombre AS Departamento,
+    m.municipio_nombre AS Municipio,
+    f.servicio_nombre AS Tipo_Servicio,
+    SUM(f.capacidad_cantidad) AS Total_Unidades_Disponibles,
+    COUNT(DISTINCT p.prestador_id) AS Numero_IPS_Reportando
+FROM core.fact_capacidad_instalada f
+INNER JOIN core.dim_prestador p ON f.prestador_id = p.prestador_id
+INNER JOIN core.dim_municipio m ON p.municipio_codigo = m.municipio_codigo
+INNER JOIN core.dim_departamento d ON m.departamento_codigo = d.departamento_codigo
+GROUP BY d.departamento_nombre, m.municipio_nombre, f.servicio_nombre;
+GO
+
+
+/* Vista: staging.vw_resumen_rechazos_calidad
+Descripción: Reporte consolidado para retroalimentación técnica al equipo de origen.
+*/
+CREATE OR ALTER VIEW [staging].[vw_resumen_rechazos_calidad] AS
+SELECT 
+    tabla_origen AS [Origen_Dato],
+    -- Limpiamos el motivo para que se vea bien en reportes
+    ISNULL(motivo_rechazo, N'Error no categorizado') AS [Tipo_Error],
+    COUNT(*) AS [Total_Registros],
+    -- Fecha de la falla más reciente para seguimiento
+    MAX(fecha_rechazo) AS [Ultima_Incidencia],
+    -- Porcentaje de impacto sobre el total de errores
+    CAST(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER() AS DECIMAL(5,2)) AS [Porcentaje_Impacto]
+FROM staging.stg_rechazos
+GROUP BY tabla_origen, motivo_rechazo;
 GO
 
 -- ==============================================================================

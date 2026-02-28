@@ -1,0 +1,75 @@
+PS C:\Users\edgar\Documents\PRUEBA TECNICA DATOS SERSOCIAL> & C:/Users/edgar/AppData/Local/Microsoft/WindowsApps/python3.13.exe c:/Users/edgar/Downloads/copia_data_etl.py
++++ INICIANDO PIPELINE ETL DATOS ABIERTOS DE SALUD +++
+
+[1/4] Extrayendo datos de la API pública...
+
+Iniciando descarga del dataset c36g-9fc2 - Modo: full
+Descargando: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 76395/76395 [00:14<00:00, 5226.58 registros/s]
+Descarga completa: 76395 registros.
+Columnas detectadas: ['codigoprestador', 'nombreprestador', 'codigohabilitacionsede', 'nombresede', 'tipoid', 'numeroidentificacion', 'naturalezajuridica', 'ese', 'municipio_prestador', 'departamentoprestadordesc', 'municipioprestadordesc', 'direccionprestador', 'email_prestador', 'telefonoprestador', 'municipiosede', 'departamentodededesc', 'municipiosededesc', 'direcci_nsede', 'email_sede', 't_lefonosede', 'claseprestador', 'fecha_corte_reps']
+
+Iniciando descarga del dataset s2ru-bqt6 - Modo: full
+Descargando: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 41427/41427 [00:08<00:00, 4983.20 registros/s]
+Descarga completa: 41427 registros.
+Columnas detectadas: ['departamento', 'municipio', 'c_digo_prestador', 'nombre_prestador', 'nit_ips', 'num_digito_verificion', 'naturaleza', 'c_digo_sede', 'n_mero_sede', 'nom_sede_ips', 'gerente', 'direcci_n', 'email', 'tel_fono', 'nom_grupo_capacidad', 'nom_descripcion_capacidad', 'num_cantidad_capacidad_instalada', 'fecha_corte', 'fuente', 'num_nivel_atencion']
+
+[2/4] Cargando capa de Staging...
+
+Proceso de carga hacia staging.stg_reps_prestadores
+c:\Users\edgar\Downloads\copia_data_etl.py:134: SAWarning: Unrecognized server version info '17.0.1050.2'.  Some SQL Server features may not function properly.
+  inspector = sql.inspect(engine)
+Registros a cargar: 76395
+Tabla staging.stg_reps_prestadores truncada exitosamente
+Registros en base de datos: 76395
+Carga finalizada correctamente.
+
+Proceso de carga hacia staging.stg_ciips_capacidad_instalada
+Registros a cargar: 41427
+Tabla staging.stg_ciips_capacidad_instalada truncada exitosamente
+Registros en base de datos: 41427
+Carga finalizada correctamente.
+
+[3/4] Ejecutando transformaciones y carga a capa Core...
+
+=== INICIANDO TRANSFORMACIÓN INTEGRAL (CAPA CORE) ===
+Vaciando tablas Core para recarga...
+
+Proceso de carga hacia core.dim_departamento
+Columnas extra serán eliminadas: {'municipio_codigo'}
+Registros a cargar: 33
+Registros en base de datos: 33
+Carga finalizada correctamente.
+
+Proceso de carga hacia core.dim_municipio
+Registros a cargar: 1116
+Registros en base de datos: 1116
+Carga finalizada correctamente.
+
+Proceso de carga hacia core.dim_prestador
+Registros a cargar: 57036
+Registros en base de datos: 57036
+Carga finalizada correctamente.
+
+Proceso de carga hacia core.fact_capacidad_instalada
+Registros a cargar: 40870
+Registros en base de datos: 40870
+Carga finalizada correctamente.
+
+Proceso de carga hacia staging.stg_rechazos
+Registros a cargar: 557
+Tabla staging.stg_rechazos truncada exitosamente
+Registros en base de datos: 557
+Carga finalizada correctamente.
+ALERTA: 557 registros enviados a la tabla de RECHAZOS.
+
+=== PROCESO DE CARGA, ESTANDARIZACIÓN Y AUDITORÍA FINALIZADO ===
+
+[4/4] Ejecutando Tests de Calidad de Datos...
+
+=== INICIANDO TESTS DE CALIDAD DE DATOS (POST-CARGA) ===
+[DATA QUALITY] Test 1 - Integridad Referencial (0 huérfanos): PASSED (0 detectados)
+[DATA QUALITY] Test 2 - No nulos en campos clave (dim_prestador): PASSED
+[DATA QUALITY] Test 3 - Balance de registros (Staging vs Core+Rechazos): PASSED (STG:41427 | CORE:40870 | RECH:557)
+
+PIPELINE FINALIZADO CON ESTADO: EXITOSO
+PS C:\Users\edgar\Documents\PRUEBA TECNICA DATOS SERSOCIAL>

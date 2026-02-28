@@ -107,7 +107,7 @@ El usuario que ejecute los scripts debe contar con permisos para:
 - Collation compatible con `Latin1_General_CI_AS` (recomendado)
 - Compatibilidad mínima nivel 140+
 
-## 3. Selección y Justificación de Datasets
+## 3. Modelo de datos
 
 Para el desarrollo del modelo se seleccionaron dos conjuntos de datos principales:
 
@@ -266,9 +266,11 @@ prueda_datos_salud/
 │   └── run_pipeline.ps1
 │
 ├── docs/
-│   └── Diccionario_Datos_Salud.xlsx
-│
+|   ├── Diccionario_Datos_Salud.xlsx
+|   ├── log_ejecucion_pipeline.csv
+│   └── salida_consola_ejecucion_pipeline.txt
 └── bi/
+    ├── evidencia_consumo PBI.png
     └── consumo_vistas.pbix
 ```
 
@@ -318,6 +320,31 @@ Desde PowerShell se puede ejecutar el pipeline completo:
 .\scripts\run_pipeline.ps1
 ```
 
+## Validaciones de calidad post-carga
+
+Al finalizar cada ejecución del ETL se ejecutan validaciones automáticas para garantizar la integridad y consistencia del modelo analítico.
+
+### Validaciones implementadas
+
+- Conteo de registros procesados vs insertados
+- Verificación de campos obligatorios (no nulos)
+- Integridad referencial entre dimensiones y hechos
+- Registro de inconsistencias en tabla de rechazos
+
+### Comportamiento ante error
+
+- Si una validación crítica falla, se ejecuta ROLLBACK de la transacción.
+- Los errores quedan registrados en la tabla de auditoría.
+- Se genera mensaje de resultado en consola/log.
+
+Estas validaciones permiten garantizar calidad de datos antes de disponibilizar la información para consumo analítico.
+
+- Conteo esperado vs insertado
+- Nulos en campos obligatorios
+- Duplicados
+- Integridad referencial
+
+
 ## 10. Decisiones de Diseño
 
 * Separación clara entre dimensiones y hechos.
@@ -347,7 +374,7 @@ La responsabilidad técnica del diseño e implementación del modelo recae compl
 
 | Versión | Fecha      | Descripción                    |
 | ------- | -------    | ------------------------------ |
-| 1.0.0   | 2026-02-29 | Entrega inicial prueba técnica |
+| 1.0.0   | 2026-02-28 | Entrega inicial prueba técnica |
 
 ---
 

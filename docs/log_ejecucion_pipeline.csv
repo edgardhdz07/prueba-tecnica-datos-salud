@@ -1,0 +1,5 @@
+﻿35;2026-02-28 09:30:04.263;stg_reps_prestadores;76395;76395;0;2;EXITOSO;None
+36;2026-02-28 09:30:05.273;stg_ciips_capacidad_instalada;41427;41427;0;1;EXITOSO;None
+37;2026-02-28 09:30:14.877;fact_capacidad_instalada;40870;40870;0;0;EXITOSO;None
+38;2026-02-28 09:30:14.897;stg_rechazos;557;557;0;0;EXITOSO;None
+39;2026-02-28 09:30:15.127;PIPELINE_GLOBAL;0;0;0;38;EXITOSO;QUALITY_TESTS: Test 1 - Integridad Referencial (0 huérfanos): PASSED (0 detectados) | Test 2 - No nulos en campos clave (dim_prestador): PASSED | Test 3 - Balance de registros (Staging vs Core+Rechazos): PASSED (STG:41427 | CORE:40870 | RECH:557)
