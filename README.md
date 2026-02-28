@@ -12,9 +12,9 @@ El objetivo del modelo es soportar análisis de capacidad instalada y habilitaci
 
 - **Modelo de Datos:** Snowflake Schema (Esquemas `core` para negocio y `staging` para auditoría).
 - **Base de Datos:** SQL Server Express (`.\SQLEXPRESS`).
-- **Lenguajes:** Python (ETL) y SQL (DDL/DML).
+- **Lenguajes:** Python (ETL) y T-SQL (DDL/DML).
 
-API SOCRATA → Python ETL → SQL (DDL + Views) → Power BI
+API SOCRATA → Python ETL → SQL SERVER (DDL + Views) → Power BI
 
 ---
 

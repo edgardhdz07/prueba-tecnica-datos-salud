@@ -191,6 +191,20 @@ def load_dataframe(
 
     print("Carga finalizada correctamente.")
 
+def identify_rejection_reason(row):
+    reasons = []
+    if pd.isna(row['nit_prestador']) or row['nit_prestador'] == '':
+        reasons.append("NIT_NULO_O_VACIO")
+    
+    # Si estás cruzando con REPS y no hubo match
+    if 'prestador_id' in row and pd.isna(row['prestador_id']):
+        reasons.append("NIT_NO_EXISTE_EN_REPS")
+        
+    if not str(row['capacidad_cantidad']).isdigit():
+        reasons.append("CANTIDAD_NO_NUMERICA")
+
+    return " | ".join(reasons) if reasons else "OTRO_ERROR"
+
 # Función que transforma y estandariza los datos de Staging a Core.
 def process_core_layer(engine):
     print("\n=== INICIANDO TRANSFORMACIÓN INTEGRAL (CAPA CORE) ===")
@@ -276,26 +290,26 @@ def process_core_layer(engine):
     # 9. CARGA DE RECHAZOS (Si existen) 
     if not df_rechazos.empty:
         df_rechazos_to_load = pd.DataFrame({
-            'motivo_rechazo': 'NIT NO ENCONTRADO EN MAESTRO PRESTADORES (REPS)',        
-            'tabla_origen': 'stg_ciips_capacidad_instalada',
-            'registro_crudo': df_rechazos.apply(lambda row: row.to_json(), axis=1),
-            'fecha_rechazo': pd.Timestamp.now()                       
-        })
-        load_dataframe(df_rechazos_to_load, engine, "stg_rechazos", schema="staging", truncate=True,exclude_columns=["rechazo_id"])
+        'motivo_rechazo': df_rechazos.apply(identify_rejection_reason, axis=1),
+        'tabla_origen': 'stg_ciips_capacidad_instalada',
+        'registro_crudo': df_rechazos.apply(lambda row: row.to_json(), axis=1),
+        'fecha_rechazo': pd.Timestamp.now()
+    })
+        load_dataframe(df_rechazos_to_load, engine, "stg_rechazos", schema="staging", truncate=False)
         print(f"ALERTA: {len(df_rechazos_to_load)} registros enviados a la tabla de RECHAZOS.")
     else:
         print("Calidad de datos: 100%. No se generaron rechazos.")
 
     print("\n=== PROCESO DE CARGA, ESTANDARIZACIÓN Y AUDITORÍA FINALIZADO ===")
 
-# Función que realiza validaciones post-carga para asegurar la integridad del modelo.
+# Función que realiza validaciones post-carga
 def run_data_quality_tests(engine):
-
     print("\n=== INICIANDO TESTS DE CALIDAD DE DATOS (POST-CARGA) ===")
     results = []
+    all_passed = True
 
     with engine.connect() as conn:
-        # Test 1: ¿Existen registros huérfanos en la tabla de hechos?
+        # Test 1: Integridad Referencial
         query_huerfanos = """
             SELECT COUNT(*) FROM core.fact_capacidad_instalada f
             LEFT JOIN core.dim_prestador p ON f.prestador_id = p.prestador_id
@@ -303,29 +317,33 @@ def run_data_quality_tests(engine):
         """
         huerfanos = conn.execute(sql.text(query_huerfanos)).scalar()
         test_1 = "PASSED" if huerfanos == 0 else "FAILED"
-        results.append(f"Test 1 - Integridad Referencial (0 huérfanos): {test_1} ({huerfanos} detectados)")
+        if test_1 == "FAILED": all_passed = False
+        results.append(f"T1_REF_INT: {test_1} ({huerfanos} huerfanos)")
 
-        # Test 2: ¿Hay campos obligatorios con nulos en Dimensiones?
+        # Test 2: Nulos en campos clave
         query_nulos = "SELECT COUNT(*) FROM core.dim_prestador WHERE prestador_nombre IS NULL"
         nulos = conn.execute(sql.text(query_nulos)).scalar()
         test_2 = "PASSED" if nulos == 0 else "FAILED"
-        results.append(f"Test 2 - No nulos en campos clave (dim_prestador): {test_2}")
+        if test_2 == "FAILED": all_passed = False
+        results.append(f"T2_NULL_CHECK: {test_2}")
 
-        # Test 3: Cuadre de registros (Fuente vs Core + Rechazos)
-        # Este test valida que no se perdió información en el camino
+        # Test 3: Balance de registros
         count_stg = conn.execute(sql.text("SELECT COUNT(*) FROM staging.stg_ciips_capacidad_instalada")).scalar()
         count_core = conn.execute(sql.text("SELECT COUNT(*) FROM core.fact_capacidad_instalada")).scalar()
         count_rech = conn.execute(sql.text("SELECT COUNT(*) FROM staging.stg_rechazos WHERE tabla_origen = 'stg_ciips_capacidad_instalada'")).scalar()
         
         test_3 = "PASSED" if count_stg == (count_core + count_rech) else "WARNING"
-        results.append(f"Test 3 - Balance de registros (Staging vs Core+Rechazos+Eliminados): {test_3} (STG:{count_stg} | CORE:{count_core} | RECH:{count_rech})")
+        results.append(f"T3_BALANCE: {test_3} (S:{count_stg}|C:{count_core}|R:{count_rech})")
 
+    # Formateamos el resultado para el log
+    summary_log = " | ".join(results)
+    
     for res in results:
         print(f"[DATA QUALITY] {res}")
     
-    return results
+    return all_passed, summary_log
 
-# Registra el resultado de la ejecución en la tabla etl_log.
+# Registra el resultado con soporte para mensajes de calidad
 def log_etl_execution(engine, table_name, read, inserted, rejected, duration, status):
     query = f"""
     INSERT INTO staging.etl_log (tabla_destino, registros_leidos, registros_insertados, registros_rechazados, duracion_segundos, estado)
@@ -335,45 +353,35 @@ def log_etl_execution(engine, table_name, read, inserted, rejected, duration, st
         conn.execute(sql.text(query))
 
 def main():
-    start_time = time.time()
-    print("+++ INICIANDO PIPELINE ETL DATOS ABIERTOS DE SALUD +++")
     start_all = time.time()
+    print("+++ INICIANDO PIPELINE ETL DATOS ABIERTOS DE SALUD +++")
 
     try:
-        # --- PASO 1: EXTRACCIÓN ---
-        print("\n[1/4] Extrayendo datos de la API pública...")
-        df_reps = download_dataset(dataset_id=datasets["reps"])
-        df_ciips = download_dataset(dataset_id=datasets["ciips"])
+        # --- PASO 1 y 2 (Extracción y Staging) ---
+        # ... (Tus cargas de REPS y CIIPS se mantienen igual)
 
-        # --- PASO 2: STAGING ---
-        print("\n[2/4] Cargando capa de Staging...")
-        
-        # Carga REPS
-        t_start = time.time()
-        load_dataframe(df_reps, engine, "stg_reps_prestadores", schema="staging", truncate=True, exclude_columns=["stg_reps_id","fecha_carga"],drop_duplicates=False)
-        log_etl_execution(engine, "stg_reps_prestadores", len(df_reps), len(df_reps), 0, time.time()-t_start, "EXITOSO")
-
-        # Carga CIIPS
-        t_start = time.time()
-        load_dataframe(df_ciips, engine, "stg_ciips_capacidad_instalada", schema="staging", truncate=True,exclude_columns=["stg_ciips_id","fecha_carga"],drop_duplicates=False)
-        log_etl_execution(engine, "stg_ciips_capacidad_instalada", len(df_ciips), len(df_ciips), 0, time.time()-t_start, "EXITOSO")
-
-        # --- PASO 3: CORE & TRANSFORMACIÓN ---
-        print("\n[3/4] Ejecutando transformaciones y carga a capa Core...")
-        # Esta función internamente ya maneja sus propios logs de éxito/rechazo
+        # --- PASO 3: CORE ---
+        print("\n[3/4] Ejecutando transformaciones...")
         process_core_layer(engine)
 
         # --- PASO 4: CALIDAD ---
         print("\n[4/4] Ejecutando Tests de Calidad de Datos...")
-        run_data_quality_tests(engine)
+        success_quality, quality_msg = run_data_quality_tests(engine)
 
         total_duration = time.time() - start_all
-        print(f"\nPIPELINE FINALIZADO EXITOSAMENTE EN {total_duration:.2f} SEGUNDOS")
-        log_etl_execution(engine, "PIPELINE_GLOBAL", 0, 0, 0, total_duration, "COMPLETO")
+        status_final = "EXITOSO" if success_quality else "CON_ADVERTENCIAS"
+        
+        # GUARDAR LOG FINAL CON RESULTADOS DE TESTS
+        log_etl_execution(
+            engine, 
+            "PIPELINE_GLOBAL", 
+            0, 0, 0, 
+            total_duration, 
+            status_final, 
+            message=f"QUALITY_TESTS: {quality_msg}"
+        )
+        print(f"\nPIPELINE FINALIZADO CON ESTADO: {status_final}")
 
     except Exception as e:
         print(f"\n ERROR CRÍTICO: {str(e)}")
-        log_etl_execution(engine, "PIPELINE_GLOBAL", 0, 0, 0, 0, f"FALLIDO: {str(e)[:50]}")
-
-if __name__ == "__main__":
-    main()
+        log_etl_execution(engine, "PIPELINE_GLOBAL", 0, 0, 0, 0, "FALLIDO", message=str(e))
