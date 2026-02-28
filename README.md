@@ -30,6 +30,32 @@ API SOCRATA → Python ETL → SQL SERVER (DDL + Views) → Power BI
 
 - Python 3.9 o superior
 
+### Configuración de variables de entorno
+
+### Token de autenticación – API datos.gov.co (Socrata)
+
+Para ejecutar el proceso ETL es necesario generar un **App Token** en la plataforma de datos abiertos (Socrata).
+
+Pasos para generarlo:
+
+1. Crear una cuenta (si no se tiene) en datos.gov.co.
+2. Ingresar a la sección de configuración de desarrollador:
+   https://www.datos.gov.co/profile/edit/developer_settings
+3. Crear un nuevo "App Token".
+4. Copiar el valor generado.
+
+---
+
+**Windows (PowerShell):**
+```setx SOCRATA_APP_TOKEN "TU_APP_TOKEN"```
+
+**Linux / MacOS:**
+```export SOCRATA_APP_TOKEN="TU_APP_TOKEN"```
+
+Luego cerrar y abrir nuevamente la terminal antes de ejecutar el ETL.
+
+---
+
 #### Librerías utilizadas
 
 #### Pueden instalarse ejecutando
@@ -83,6 +109,9 @@ Aporta visibilidad y trazabilidad al proceso ETL cuando se manejan grandes volú
 
 #### time
 Utilizado para controlar pausas entre solicitudes HTTP, evitando saturar la API pública y reduciendo el riesgo de bloqueo por límite de peticiones.
+
+#### os
+Utilizado para llamar la variable de entorno para uso de la API SOCRATA
 
 
 ### Herramientas utilizadas
@@ -267,7 +296,7 @@ prueda_datos_salud/
 │
 ├── docs/
 |   ├── Diccionario_Datos_Salud.xlsx
-|   ├── log_ejecucion_pipeline.csv
+|   ├── log_ejecucion_pipeline_etl.csv
 │   └── salida_consola_ejecucion_pipeline.txt
 └── bi/
     ├── evidencia_consumo PBI.png

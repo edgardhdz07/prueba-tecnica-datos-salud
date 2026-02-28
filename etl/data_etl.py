@@ -4,8 +4,12 @@ from sodapy import Socrata # Cliente oficial de Socrata para consumir datasets p
 import time # Se utiliza para controlar pausas entre solicitudes HTTP y evitar saturar la API.
 from tqdm import tqdm # Barra de progreso para la descarga
 # Variables de configuración del API y SQLSERVER
+import os
 
-app_token = "RjC4dUfGBI1d8e0a2pGPVjAAH"
+app_token = os.getenv("SOCRATA_APP_TOKEN")
+
+if not app_token:
+    raise ValueError("Debe configurar la variable de entorno SOCRATA_APP_TOKEN")
 
 datasets = {
     "reps": "c36g-9fc2", # Registro Especial de Prestadores de Servicios de Salud
